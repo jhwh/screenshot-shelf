@@ -5,6 +5,13 @@ build/
 .build/
 dist/
 .cursor/
+.env
+.env.*
+*.pem
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile
 *.xcuserstate
 *.moved-aside
 *.hmap
