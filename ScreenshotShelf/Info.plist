@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Screenshot Shelf</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Screenshot Shelf</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAccessibilityUsageDescription</key>
+	<string>Screenshot Shelf focuses Cursor, Claude, or Codex and pastes the screenshot into the active session.</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Screenshot Shelf lists screenshots saved to your chosen folder so you can drag them into other apps.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Screenshot Shelf can watch a folder you choose for screenshot files.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Screenshot Shelf can watch a folder you choose for screenshot files.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSPicturesFolderUsageDescription</key>
+	<string>Screenshot Shelf can also watch Pictures/Screenshots for new captures.</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
+</dict>
+</plist>
