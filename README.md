@@ -1,8 +1,8 @@
 # Screenshot Shelf
 
-A macOS menu-bar shelf for recent screenshots. One click into Cursor, Claude, or Codex.
+Taking the screenshot was the easy part — you hit ⇧⌘4. Then comes the fun bit: forty files named `Screenshot 2026-08-14 at 3.41.07 PM`. Shelf keeps your last shots in the menu bar.
 
-No accounts, no network, no analytics. Not a Cursor extension — Cursor is just a drop target.
+One click to send screenshot into Cursor, Claude, or Codex.
 
 **Download:** https://jhwh.github.io/screenshot-shelf/
 
