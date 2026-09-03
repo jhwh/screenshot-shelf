@@ -6,6 +6,8 @@ enum SendDestination: String, CaseIterable, Identifiable, Hashable {
     case claudeCode
     case codex
     case codexCLI
+    case slack
+    case grokBot
 
     var id: String { rawValue }
 
@@ -16,6 +18,8 @@ enum SendDestination: String, CaseIterable, Identifiable, Hashable {
         case .claudeCode: return "Claude Code"
         case .codex: return "Codex"
         case .codexCLI: return "Codex CLI"
+        case .slack: return "Slack"
+        case .grokBot: return "Grok Bot"
         }
     }
 
@@ -26,6 +30,8 @@ enum SendDestination: String, CaseIterable, Identifiable, Hashable {
         case .claudeCode: return "Code"
         case .codex: return "Codex"
         case .codexCLI: return "CLI"
+        case .slack: return "Slack"
+        case .grokBot: return "Grok"
         }
     }
 
@@ -44,6 +50,8 @@ enum SendDestination: String, CaseIterable, Identifiable, Hashable {
         case .claudeCode: return "terminal"
         case .codex: return "sparkles"
         case .codexCLI: return "apple.terminal"
+        case .slack: return "number"
+        case .grokBot: return "bolt"
         }
     }
 
@@ -59,12 +67,16 @@ enum SendDestination: String, CaseIterable, Identifiable, Hashable {
             return "Pastes with ⌘V into Codex / ChatGPT.app."
         case .codexCLI:
             return "Pastes with Ctrl+V into a terminal window you pick."
+        case .slack:
+            return "Pastes with ⌘V into the Slack window you pick. Focus the message field first if you can."
+        case .grokBot:
+            return "Pastes with ⌘V into the active Grok Bot chat."
         }
     }
 
     var usesControlPaste: Bool {
         switch self {
-        case .cursor, .claudeDesktop, .codex:
+        case .cursor, .claudeDesktop, .codex, .slack, .grokBot:
             return false
         case .claudeCode, .codexCLI:
             return true
@@ -89,6 +101,10 @@ enum SendDestination: String, CaseIterable, Identifiable, Hashable {
             ]
         case .codexCLI:
             return []
+        case .slack:
+            return ["com.tinyspeck.slackmacgap"]
+        case .grokBot:
+            return ["com.anysphere.sand"]
         }
     }
 
@@ -103,13 +119,18 @@ enum SendDestination: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .claudeCode, .codexCLI:
             return true
-        case .cursor, .claudeDesktop, .codex:
+        case .cursor, .claudeDesktop, .codex, .slack, .grokBot:
             return false
         }
     }
 
     var triesComposerFocus: Bool {
-        self == .cursor
+        switch self {
+        case .cursor, .slack, .grokBot:
+            return true
+        case .claudeDesktop, .claudeCode, .codex, .codexCLI:
+            return false
+        }
     }
 
     static let terminalHostBundleIDs = [

@@ -88,6 +88,20 @@ struct SettingsPane: View {
                 Text("Show the shelf as soon as a capture lands in a watched folder.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                HStack {
+                    Text("Keyboard shortcut")
+                    Spacer()
+                    HotKeyRecorder(hotKey: $settings.openHotKey)
+                }
+                Text("Toggle the shelf from any app. Default is ⌥⌘S.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if settings.openHotKeyConflict {
+                    Text("That shortcut is already used by macOS or another app. Pick a different combo.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
 
             Section("General") {

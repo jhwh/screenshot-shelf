@@ -15,12 +15,19 @@ struct ScreenshotCell: View {
         VStack(alignment: .leading, spacing: 6) {
             thumbnailWell
 
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Text(ScreenshotTimeFormatter.caption(for: item.displayDate))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                if !settings.enabledDestinationsInOrder.isEmpty {
+                    SendDestinationChips(item: item) { destination in
+                        showSent(to: destination)
+                    }
+                    .layoutPriority(1)
+                }
 
                 Button {
                     library.moveToTrash(item)
@@ -33,12 +40,6 @@ struct ScreenshotCell: View {
                 .opacity(hovering ? 1 : 0.45)
                 .help("Move to Trash")
                 .accessibilityLabel("Move screenshot to Trash")
-            }
-
-            if !settings.enabledDestinationsInOrder.isEmpty {
-                SendDestinationChips(item: item) { destination in
-                    showSent(to: destination)
-                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -57,7 +58,7 @@ struct ScreenshotCell: View {
             Divider()
             Button("Move to Trash", role: .destructive) { library.moveToTrash(item) }
         }
-        .help("Click to copy · Drag into any app · Send chips paste into the active session")
+        .help("Click to copy · Drag into any app · App icons paste into the active session")
         .accessibilityLabel("Screenshot from \(ScreenshotTimeFormatter.caption(for: item.displayDate))")
     }
 

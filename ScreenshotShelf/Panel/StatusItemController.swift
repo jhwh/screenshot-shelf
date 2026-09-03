@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 enum PanelDismissal {
@@ -21,6 +22,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var dragEndObserver: NSObjectProtocol?
     private var isDragging = false
     private let destinations = DestinationCatalog()
+    private let globalHotKey = GlobalHotKey()
+    private var cancellables = Set<AnyCancellable>()
+    private var recordingObserver: NSObjectProtocol?
 
     init(library: ScreenshotLibrary, settings: AppSettings) {
         self.library = library
@@ -45,6 +49,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         configureStatusItem()
         observeDragging()
+        observeHotKey()
+        registerOpenHotKey()
         library.onNewScreenshot = { [weak self] in
             guard let self, self.settings.openShelfOnCapture else { return }
             self.showPanel()
@@ -104,7 +110,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         )?.withSymbolConfiguration(config)
         image?.isTemplate = true
         button.image = image
-        button.toolTip = "Screenshot Shelf"
+        refreshStatusItemTooltip()
 
         statusMenu.delegate = self
         let placeholder = NSMenuItem()
@@ -186,6 +192,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 {
+                if HotKeyRecording.isActive {
+                    return event
+                }
                 Task { @MainActor in
                     self?.hidePanel()
                 }
@@ -240,12 +249,54 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
     }
 
+    private func observeHotKey() {
+        settings.$openHotKey
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.registerOpenHotKey()
+            }
+            .store(in: &cancellables)
+
+        recordingObserver = NotificationCenter.default.addObserver(
+            forName: .hotKeyRecordingDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.registerOpenHotKey()
+            }
+        }
+    }
+
+    private func registerOpenHotKey() {
+        let shortcut = HotKeyRecording.isActive ? nil : settings.openHotKey
+        let registered = globalHotKey.update(shortcut) { [weak self] in
+            Task { @MainActor in
+                self?.togglePanel()
+            }
+        }
+        settings.openHotKeyConflict = shortcut != nil && !registered
+        refreshStatusItemTooltip()
+    }
+
+    private func refreshStatusItemTooltip() {
+        if let shortcut = settings.openHotKey?.displayString {
+            statusItem.button?.toolTip = "Screenshot Shelf · \(shortcut)"
+        } else {
+            statusItem.button?.toolTip = "Screenshot Shelf"
+        }
+    }
+
     deinit {
         if let dragBeginObserver {
             NotificationCenter.default.removeObserver(dragBeginObserver)
         }
         if let dragEndObserver {
             NotificationCenter.default.removeObserver(dragEndObserver)
+        }
+        if let recordingObserver {
+            NotificationCenter.default.removeObserver(recordingObserver)
         }
     }
 }

@@ -7,6 +7,7 @@ final class AppSettings: ObservableObject {
         static let redirectSystemScreenshots = "redirectSystemScreenshots"
         static let skipFloatingPreview = "skipFloatingPreview"
         static let openShelfOnCapture = "openShelfOnCapture"
+        static let openHotKey = "openShelfHotKey"
         static let enabledDestinations = "enabledSendDestinations.v2"
         static let previousLocation = "previousSystemScreenshotLocation"
         static let previousLocationUnset = "previousSystemScreenshotLocationUnset"
@@ -37,6 +38,14 @@ final class AppSettings: ObservableObject {
             UserDefaults.standard.set(openShelfOnCapture, forKey: Keys.openShelfOnCapture)
         }
     }
+
+    @Published var openHotKey: ShelfHotKey? {
+        didSet {
+            persistOpenHotKey()
+        }
+    }
+
+    @Published var openHotKeyConflict = false
 
     @Published var enabledDestinations: Set<SendDestination> {
         didSet {
@@ -88,6 +97,15 @@ final class AppSettings: ObservableObject {
             openShelfOnCapture = true
         } else {
             openShelfOnCapture = UserDefaults.standard.bool(forKey: Keys.openShelfOnCapture)
+        }
+        if let data = UserDefaults.standard.data(forKey: Keys.openHotKey) {
+            if data.isEmpty {
+                openHotKey = nil
+            } else {
+                openHotKey = (try? JSONDecoder().decode(ShelfHotKey.self, from: data)) ?? .defaultOpen
+            }
+        } else {
+            openHotKey = .defaultOpen
         }
         if UserDefaults.standard.object(forKey: Keys.enabledDestinations) == nil {
             enabledDestinations = []
@@ -145,5 +163,13 @@ final class AppSettings: ObservableObject {
         }
         defaults.removeObject(forKey: Keys.previousShowThumbnail)
         defaults.removeObject(forKey: Keys.previousShowThumbnailUnset)
+    }
+
+    private func persistOpenHotKey() {
+        if let openHotKey, let data = try? JSONEncoder().encode(openHotKey) {
+            UserDefaults.standard.set(data, forKey: Keys.openHotKey)
+        } else {
+            UserDefaults.standard.set(Data(), forKey: Keys.openHotKey)
+        }
     }
 }

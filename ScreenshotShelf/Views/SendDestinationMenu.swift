@@ -43,10 +43,7 @@ enum SendDestinationMenu {
                 action: nil,
                 keyEquivalent: ""
             )
-            item.image = NSImage(
-                systemSymbolName: destination.symbolName,
-                accessibilityDescription: destination.title
-            )
+            item.image = DestinationAppIcon.nsImage(for: destination, pointSize: 16)
 
             if !running.contains(destination) {
                 item.isEnabled = false
@@ -92,25 +89,13 @@ struct SendDestinationChips: View {
     @EnvironmentObject private var catalog: DestinationCatalog
 
     var body: some View {
-        let destinations = settings.enabledDestinationsInOrder
-        if destinations.count == 1, let destination = destinations.first {
-            SendDestinationButton(
-                destination: destination,
-                running: catalog.running.contains(destination),
-                style: .primary
-            ) {
-                handleClick(destination)
-            }
-        } else {
-            VStack(spacing: 5) {
-                ForEach(destinations) { destination in
-                    SendDestinationButton(
-                        destination: destination,
-                        running: catalog.running.contains(destination),
-                        style: destinations.count <= 2 ? .primary : .compact
-                    ) {
-                        handleClick(destination)
-                    }
+        HStack(spacing: 3) {
+            ForEach(settings.enabledDestinationsInOrder) { destination in
+                SendDestinationIconButton(
+                    destination: destination,
+                    running: catalog.running.contains(destination)
+                ) {
+                    handleClick(destination)
                 }
             }
         }
@@ -140,62 +125,33 @@ struct SendDestinationChips: View {
     }
 }
 
-private struct SendDestinationButton: View {
-    enum Style {
-        case primary
-        case compact
-    }
-
+private struct SendDestinationIconButton: View {
     let destination: SendDestination
     let running: Bool
-    let style: Style
     let action: () -> Void
 
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: style == .primary ? 7 : 5) {
-                Image(systemName: running ? "paperplane.fill" : destination.symbolName)
-                    .font(style == .primary ? .caption.weight(.semibold) : .caption2.weight(.semibold))
-                Text(style == .primary ? destination.sendTitle : destination.compactSendTitle)
-                    .font(style == .primary ? .caption.weight(.semibold) : .caption2.weight(.semibold))
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, style == .primary ? 8 : 6)
-            .padding(.horizontal, 8)
-            .foregroundStyle(labelColor)
-            .background(background)
+            DestinationAppIcon(destination: destination)
+                .frame(width: 22, height: 22)
+                .padding(2)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.primary.opacity(hovering && running ? 0.10 : 0))
+                )
         }
         .buttonStyle(.plain)
         .disabled(!running)
-        .opacity(running ? 1 : 0.72)
-        .scaleEffect(hovering && running ? 1.015 : 1)
+        .opacity(running ? 1 : 0.34)
+        .saturation(running ? 1 : 0.15)
+        .scaleEffect(hovering && running ? 1.08 : 1)
         .animation(.easeOut(duration: 0.12), value: hovering)
         .onHover { hovering = $0 }
         .background(PointingHandCursor(enabled: running))
         .help(helpText)
         .accessibilityLabel(destination.sendTitle)
-    }
-
-    private var labelColor: Color {
-        if running {
-            return Color(nsColor: .windowBackgroundColor)
-        }
-        return .secondary
-    }
-
-    @ViewBuilder
-    private var background: some View {
-        let shape = RoundedRectangle(cornerRadius: style == .primary ? 8 : 7, style: .continuous)
-        if running {
-            shape.fill(Color.primary.opacity(hovering ? 0.92 : 0.82))
-        } else {
-            shape
-                .fill(Color.primary.opacity(0.05))
-                .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
-        }
     }
 
     private var helpText: String {
@@ -206,6 +162,57 @@ private struct SendDestinationButton: View {
             return "\(destination.sendTitle). Composer should be focused; Screenshot Shelf will try to find it."
         }
         return "\(destination.sendTitle) — active session"
+    }
+}
+
+struct DestinationAppIcon: View {
+    let destination: SendDestination
+
+    var body: some View {
+        if let icon = Self.nsImage(for: destination, pointSize: 22) {
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+        } else {
+            Image(systemName: destination.symbolName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.primary.opacity(0.08))
+                )
+        }
+    }
+
+    static func nsImage(for destination: SendDestination, pointSize: CGFloat) -> NSImage? {
+        DestinationAppIconCache.image(for: destination, pointSize: pointSize)
+    }
+}
+
+private enum DestinationAppIconCache {
+    private static var cache: [String: NSImage] = [:]
+
+    static func image(for destination: SendDestination, pointSize: CGFloat) -> NSImage? {
+        let key = "\(destination.rawValue):\(Int(pointSize))"
+        if let cached = cache[key] {
+            return cached
+        }
+        guard let url = installedAppURL(for: destination) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icon.size = NSSize(width: pointSize, height: pointSize)
+        cache[key] = icon
+        return icon
+    }
+
+    private static func installedAppURL(for destination: SendDestination) -> URL? {
+        for bundleID in destination.dedicatedBundleIDs {
+            if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                return url
+            }
+        }
+        return nil
     }
 }
 

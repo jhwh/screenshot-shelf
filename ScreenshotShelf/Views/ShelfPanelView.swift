@@ -40,6 +40,11 @@ struct ShelfPanelView: View {
                 .font(.headline)
             Spacer()
             if !showingSettings {
+                if let shortcut = settings.openHotKey?.displayString {
+                    Text(shortcut)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.tertiary)
+                }
                 Text("\(library.items.count)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -104,7 +109,7 @@ struct ShelfPanelView: View {
                 .buttonStyle(.plain)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .help("Choose Cursor, Claude, or Codex in Settings. Only those apps appear on each screenshot.")
+                .help("Choose Cursor, Claude, Codex, Slack, or Grok Bot in Settings. Only those apps appear on each screenshot.")
                 .padding(.trailing, 10)
             }
 
