@@ -6,6 +6,7 @@ enum SendResult {
     case needsAccessibility
     case copyFailed
     case appNotRunning
+    case targetDidNotActivate
 }
 
 enum ScreenshotSender {
@@ -13,6 +14,13 @@ enum ScreenshotSender {
     private static var didPromptThisLaunch = false
     @MainActor
     private static var didExplainThisLaunch = false
+    @MainActor
+    private static var sendBusy = false
+    @MainActor
+    private static var sendWaiters: [CheckedContinuation<Void, Never>] = []
+
+    private static let activationTimeout: Duration = .seconds(1)
+    private static let activationPoll: Duration = .milliseconds(40)
 
     @MainActor
     static func send(
@@ -21,28 +29,14 @@ enum ScreenshotSender {
         window: DestinationWindow?,
         library: ScreenshotLibrary
     ) async -> SendResult {
-        guard ensureAccessibility() else { return .needsAccessibility }
-
-        let target = resolvedTarget(destination: destination, window: window)
-        guard let target else { return .appNotRunning }
-        guard library.copyImage(of: item) else { return .copyFailed }
-
-        PanelDismissal.suppress = true
-        defer { PanelDismissal.suppress = false }
-        NSApp.keyWindow?.resignKey()
-        try? await Task.sleep(nanoseconds: 80_000_000)
-
-        activate(pid: target.pid)
-        if let axWindow = target.axWindow {
-            raise(axWindow)
+        await withSendLock {
+            await performSend(
+                item: item,
+                destination: destination,
+                window: window,
+                library: library
+            )
         }
-        if destination.triesComposerFocus {
-            focusComposer(pid: target.pid)
-        }
-
-        try? await Task.sleep(nanoseconds: 220_000_000)
-        postPaste(useControl: destination.usesControlPaste)
-        return .sent
     }
 
     @MainActor
@@ -67,6 +61,67 @@ enum ScreenshotSender {
 
     static func isTrusted() -> Bool {
         AXIsProcessTrusted()
+    }
+
+    @MainActor
+    private static func withSendLock<T>(_ work: () async -> T) async -> T {
+        if sendBusy {
+            await withCheckedContinuation { continuation in
+                sendWaiters.append(continuation)
+            }
+        } else {
+            sendBusy = true
+        }
+
+        defer {
+            if sendWaiters.isEmpty {
+                sendBusy = false
+            } else {
+                sendWaiters.removeFirst().resume()
+            }
+        }
+
+        return await work()
+    }
+
+    @MainActor
+    private static func performSend(
+        item: ScreenshotItem,
+        destination: SendDestination,
+        window: DestinationWindow?,
+        library: ScreenshotLibrary
+    ) async -> SendResult {
+        guard ensureAccessibility() else { return .needsAccessibility }
+
+        let target = resolvedTarget(destination: destination, window: window)
+        guard let target else { return .appNotRunning }
+        guard let app = NSRunningApplication(processIdentifier: target.pid), !app.isTerminated else {
+            return .appNotRunning
+        }
+        guard library.copyImage(of: item) else { return .copyFailed }
+
+        PanelDismissal.suppress = true
+        defer { PanelDismissal.suppress = false }
+
+        yieldAndActivate(app, window: target.axWindow)
+        guard await waitUntilFrontmost(pid: target.pid, window: target.axWindow) else {
+            return .targetDidNotActivate
+        }
+
+        if destination.triesComposerFocus {
+            focusComposer(pid: target.pid)
+            try? await Task.sleep(for: activationPoll)
+            if !isFrontmost(pid: target.pid) {
+                yieldAndActivate(app, window: target.axWindow)
+                guard await waitUntilFrontmost(pid: target.pid, window: target.axWindow) else {
+                    return .targetDidNotActivate
+                }
+            }
+        }
+
+        guard isFrontmost(pid: target.pid) else { return .targetDidNotActivate }
+        postPaste(useControl: destination.usesControlPaste)
+        return .sent
     }
 
     @MainActor
@@ -124,9 +179,31 @@ enum ScreenshotSender {
         return nil
     }
 
-    private static func activate(pid: pid_t) {
-        guard let app = NSRunningApplication(processIdentifier: pid) else { return }
-        app.activate(options: [.activateIgnoringOtherApps])
+    private static func yieldAndActivate(_ app: NSRunningApplication, window: AXUIElement?) {
+        NSApp.yieldActivation(to: app)
+        app.activate()
+        if let window {
+            raise(window)
+        }
+    }
+
+    private static func isFrontmost(pid: pid_t) -> Bool {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+    }
+
+    private static func waitUntilFrontmost(pid: pid_t, window: AXUIElement?) async -> Bool {
+        let deadline = ContinuousClock.now + activationTimeout
+        while ContinuousClock.now < deadline {
+            if isFrontmost(pid: pid) {
+                return true
+            }
+            guard let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else {
+                return false
+            }
+            yieldAndActivate(app, window: window)
+            try? await Task.sleep(for: activationPoll)
+        }
+        return isFrontmost(pid: pid)
     }
 
     private static func raise(_ window: AXUIElement) {
