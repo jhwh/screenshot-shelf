@@ -6,6 +6,10 @@ enum PanelDismissal {
     static var suppress = false
 }
 
+extension Notification.Name {
+    static let screenshotShelfHideForSend = Notification.Name("pl.mendrela.screenshotshelf.hideForSend")
+}
+
 @MainActor
 final class StatusItemController: NSObject, NSMenuDelegate {
     private let library: ScreenshotLibrary
@@ -25,6 +29,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let globalHotKey = GlobalHotKey()
     private var cancellables = Set<AnyCancellable>()
     private var recordingObserver: NSObjectProtocol?
+    private var hideForSendObserver: NSObjectProtocol?
 
     init(library: ScreenshotLibrary, settings: AppSettings) {
         self.library = library
@@ -50,6 +55,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         configureStatusItem()
         observeDragging()
         observeHotKey()
+        observeHideForSend()
         registerOpenHotKey()
         library.onNewScreenshot = { [weak self] in
             guard let self, self.settings.openShelfOnCapture else { return }
@@ -228,6 +234,18 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return frame.contains(NSEvent.mouseLocation)
     }
 
+    private func observeHideForSend() {
+        hideForSendObserver = NotificationCenter.default.addObserver(
+            forName: .screenshotShelfHideForSend,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.hidePanel(force: true)
+            }
+        }
+    }
+
     private func observeDragging() {
         dragBeginObserver = NotificationCenter.default.addObserver(
             forName: .screenshotShelfDragDidBegin,
@@ -297,6 +315,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         }
         if let recordingObserver {
             NotificationCenter.default.removeObserver(recordingObserver)
+        }
+        if let hideForSendObserver {
+            NotificationCenter.default.removeObserver(hideForSendObserver)
         }
     }
 }

@@ -20,12 +20,11 @@ final class DestinationCatalog: ObservableObject {
     init() {
         refresh()
         let center = NSWorkspace.shared.notificationCenter
-        let names = [
+        let refreshNames = [
             NSWorkspace.didLaunchApplicationNotification,
             NSWorkspace.didTerminateApplicationNotification,
-            NSWorkspace.didActivateApplicationNotification,
         ]
-        for name in names {
+        for name in refreshNames {
             observers.append(
                 center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                     Task { @MainActor in
@@ -34,6 +33,20 @@ final class DestinationCatalog: ObservableObject {
                 }
             )
         }
+        observers.append(
+            center.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                Task { @MainActor in
+                    if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+                        DestinationWindowLister.rememberActivation(of: app)
+                    }
+                    self?.refresh()
+                }
+            }
+        )
     }
 
     deinit {
@@ -43,25 +56,61 @@ final class DestinationCatalog: ObservableObject {
     }
 
     func refresh() {
+        DestinationWindowLister.pruneActivations()
         running = Set(SendDestination.allCases.filter { DestinationWindowLister.isRunning($0) })
+        if let front = NSWorkspace.shared.frontmostApplication {
+            DestinationWindowLister.rememberActivation(of: front)
+        }
     }
 }
 
 enum DestinationWindowLister {
+    private static var lastActivatedPIDs: [SendDestination: pid_t] = [:]
+
     static func isRunning(_ destination: SendDestination) -> Bool {
         !runningApplications(for: destination).isEmpty
     }
 
+    static func matches(_ app: NSRunningApplication, destination: SendDestination) -> Bool {
+        guard let bid = app.bundleIdentifier else { return false }
+        return destination.lookupBundleIDs.contains(bid)
+    }
+
+    static func rememberActivation(of app: NSRunningApplication) {
+        guard !app.isTerminated else { return }
+        for destination in SendDestination.allCases where matches(app, destination: destination) {
+            lastActivatedPIDs[destination] = app.processIdentifier
+        }
+    }
+
+    static func pruneActivations() {
+        for destination in SendDestination.allCases {
+            guard let pid = lastActivatedPIDs[destination] else { continue }
+            if NSRunningApplication(processIdentifier: pid)?.isTerminated != false {
+                lastActivatedPIDs[destination] = nil
+            }
+        }
+    }
+
+    static func lastActivatedPID(for destination: SendDestination) -> pid_t? {
+        pruneActivations()
+        return lastActivatedPIDs[destination]
+    }
+
     static func runningApplications(for destination: SendDestination) -> [NSRunningApplication] {
-        let ids = Set(destination.lookupBundleIDs)
-        return NSWorkspace.shared.runningApplications.filter { app in
-            guard let bid = app.bundleIdentifier, ids.contains(bid) else { return false }
-            return !app.isTerminated && app.activationPolicy == .regular
+        NSWorkspace.shared.runningApplications.filter { app in
+            matches(app, destination: destination) && !app.isTerminated && app.activationPolicy == .regular
         }
     }
 
     static func windows(for destination: SendDestination) -> [DestinationWindow] {
         runningApplications(for: destination).flatMap { windows(in: $0, destination: destination) }
+    }
+
+    static func preferredWindow(in windows: [DestinationWindow]) -> DestinationWindow? {
+        windows.first { axBool($0.axWindow, kAXMainAttribute as String) }
+            ?? windows.first { axBool($0.axWindow, kAXFocusedAttribute as String) }
+            ?? windows.first
     }
 
     private static func windows(
@@ -96,11 +145,35 @@ enum DestinationWindowLister {
         }
     }
 
+    static func axElement(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
+              let value
+        else {
+            return nil
+        }
+        return (value as! AXUIElement)
+    }
+
     static func axString(_ element: AXUIElement, _ attribute: String) -> String? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
             return nil
         }
         return value as? String
+    }
+
+    static func axBool(_ element: AXUIElement, _ attribute: String) -> Bool {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
+            return false
+        }
+        if let flag = value as? Bool {
+            return flag
+        }
+        if let number = value as? NSNumber {
+            return number.boolValue
+        }
+        return false
     }
 }

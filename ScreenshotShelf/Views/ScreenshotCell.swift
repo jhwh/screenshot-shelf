@@ -23,8 +23,8 @@ struct ScreenshotCell: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if !settings.enabledDestinationsInOrder.isEmpty {
-                    SendDestinationChips(item: item) { destination in
-                        showSent(to: destination)
+                    SendDestinationChips(item: item) { destination, result in
+                        showOutcome(result, destination: destination)
                     }
                     .layoutPriority(1)
                 }
@@ -174,13 +174,11 @@ struct ScreenshotCell: View {
             window: window,
             library: library
         )
-        if result == .sent {
-            showSent(to: destination)
-        }
+        showOutcome(result, destination: destination)
     }
 
-    private func showSent(to destination: SendDestination) {
-        sentLabel = "Sent to \(destination.title)"
+    private func showOutcome(_ result: SendResult, destination: SendDestination) {
+        sentLabel = result.overlayMessage(for: destination)
         copied = false
         Task {
             try? await Task.sleep(nanoseconds: 700_000_000)

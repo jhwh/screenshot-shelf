@@ -82,7 +82,7 @@ enum SendDestinationMenu {
 
 struct SendDestinationChips: View {
     let item: ScreenshotItem
-    var onSent: (SendDestination) -> Void
+    var onFinished: (SendDestination, SendResult) -> Void
 
     @EnvironmentObject private var library: ScreenshotLibrary
     @EnvironmentObject private var settings: AppSettings
@@ -119,9 +119,7 @@ struct SendDestinationChips: View {
             window: window,
             library: library
         )
-        if result == .sent {
-            onSent(destination)
-        }
+        onFinished(destination, result)
     }
 }
 
